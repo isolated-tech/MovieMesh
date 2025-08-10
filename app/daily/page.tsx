@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import TopNav from "@/components/top-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import ConnectGame, { type GameResult } from "@/components/game/connect-game"
@@ -15,7 +15,7 @@ export default function DailyPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setAuthed(Boolean(data.user?.id)))
-  }, [])
+  }, [supabase.auth])
 
   useEffect(() => {
     const today = new Date()
@@ -39,9 +39,10 @@ export default function DailyPage() {
         .select("*")
         .eq("date_key", dateKey)
         .maybeSingle()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setExisting((data as any) ?? null)
     })()
-  }, [dateKey])
+  }, [dateKey, supabase])
 
   async function handleComplete(r: GameResult) {
     const payload = {

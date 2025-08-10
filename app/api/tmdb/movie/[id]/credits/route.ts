@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server"
 import { movieCredits } from "@/lib/tmdb"
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
+interface CastMember {
+  id: number
+  name: string
+}
+
+export async function GET(_: Request, props: { params: Promise<{ id: string }> }) {
   try {
+    const params = await props.params
     const d = await movieCredits(params.id)
     // normalize to { id, name }
-    const results = (d.cast || []).map((p: any) => ({ id: String(p.id), name: p.name }))
+    const results = (d.cast || []).map((p: CastMember) => ({ id: String(p.id), name: p.name }))
     return NextResponse.json({ results })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : 'An error occurred'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

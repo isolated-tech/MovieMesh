@@ -22,7 +22,7 @@ export default function HomePage() {
       setHasUsername(Boolean(p?.username))
       if (!p?.username) setShowDialog(true)
     })
-  }, [])
+  }, [supabase])
 
   return (
     <main className="min-h-[100dvh] bg-background text-foreground">

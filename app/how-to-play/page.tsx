@@ -1,6 +1,5 @@
 import TopNav from "@/components/top-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import Image from "next/image"
 
 export default function HowToPlayPage() {
   return (

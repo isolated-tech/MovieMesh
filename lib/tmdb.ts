@@ -14,7 +14,7 @@ function getAuthHeader() {
     : { type: "key", header: {} as Record<string, string>, apiKey }
 }
 
-export async function tmdbFetch(path: string, params?: Record<string, any>) {
+export async function tmdbFetch(path: string, params?: Record<string, string | number | boolean | undefined | null>) {
   const auth = getAuthHeader()
   const url = new URL(TMDB_BASE + path)
   if (params) {

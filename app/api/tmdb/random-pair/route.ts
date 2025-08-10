@@ -5,7 +5,8 @@ export async function GET() {
   try {
     const pair = await pickRandomPair()
     return NextResponse.json(pair)
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : 'An error occurred'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

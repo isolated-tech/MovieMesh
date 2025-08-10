@@ -26,7 +26,7 @@ export default function UsernameDialog({
         setValue(data?.username ?? "")
       })
     }
-  }, [open])
+  }, [open, supabase])
 
   async function save() {
     if (!userId || !value.trim()) return

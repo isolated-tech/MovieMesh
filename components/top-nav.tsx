@@ -35,7 +35,7 @@ export default function TopNav() {
     return () => {
       sub.subscription.unsubscribe()
     }
-  }, [])
+  }, [supabase])
 
   async function signOut() {
     await supabase.auth.signOut()

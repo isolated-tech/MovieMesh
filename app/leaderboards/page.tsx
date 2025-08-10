@@ -3,7 +3,7 @@
 import TopNav from "@/components/top-nav"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { actorById } from "@/data/graph"
 import { getSupabaseBrowserClient } from "@/lib/supabase/client"
 
@@ -23,7 +23,7 @@ function usePersonName(id: string) {
     if (!name) {
       fetch(`/api/tmdb/person/${id}`).then(r => r.json()).then(d => setName(d?.name || id))
     }
-  }, [id])
+  }, [id, name])
   return name || id
 }
 
@@ -31,10 +31,11 @@ export default function LeaderboardsPage() {
   const supabase = getSupabaseBrowserClient()
   const [rows, setRows] = useState<Row[]>([])
 
-  async function load() {
+  const load = React.useCallback(async () => {
     const d = await supabase.from("daily_results_with_usernames").select("*").limit(50)
     const g = await supabase.from("group_results_with_usernames").select("*").limit(50)
     const dailyRows =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       d.data?.map((r: any) => ({
         id: `d-${r.date_key}-${r.user_id}`,
         username: r.username,
@@ -45,6 +46,7 @@ export default function LeaderboardsPage() {
         kind: "daily" as const,
       })) ?? []
     const groupRows =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       g.data?.map((r: any) => ({
         id: `g-${r.id}`,
         username: r.username,
@@ -55,7 +57,7 @@ export default function LeaderboardsPage() {
         kind: "group" as const,
       })) ?? []
     setRows([...dailyRows, ...groupRows])
-  }
+  }, [supabase])
 
   useEffect(() => {
     load()
@@ -68,7 +70,7 @@ export default function LeaderboardsPage() {
     return () => {
       supabase.removeChannel(chan)
     }
-  }, [])
+  }, [load, supabase])
 
   const top = useMemo(
     () =>
@@ -97,27 +99,31 @@ export default function LeaderboardsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {top.map((r) => {
-                  const aName = usePersonName(r.start_actor_id)
-                  const bName = usePersonName(r.end_actor_id)
-                  return (
-                    <TableRow key={r.id}>
-                      <TableCell className="text-xs">{r.kind}</TableCell>
-                      <TableCell>{r.username}</TableCell>
-                      <TableCell className="text-sm">
-                        {aName} → {bName}
-                      </TableCell>
-                      <TableCell className="text-right">{r.steps}</TableCell>
-                      <TableCell className="text-right">{formatMs(r.time_ms)}</TableCell>
-                    </TableRow>
-                  )
-                })}
+                {top.map((r) => (
+                  <TableRowWithNames key={r.id} row={r} />
+                ))}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
       </section>
     </main>
+  )
+}
+
+function TableRowWithNames({ row }: { row: Row }) {
+  const aName = usePersonName(row.start_actor_id)
+  const bName = usePersonName(row.end_actor_id)
+  return (
+    <TableRow>
+      <TableCell className="text-xs">{row.kind}</TableCell>
+      <TableCell>{row.username}</TableCell>
+      <TableCell className="text-sm">
+        {aName} → {bName}
+      </TableCell>
+      <TableCell className="text-right">{row.steps}</TableCell>
+      <TableCell className="text-right">{formatMs(row.time_ms)}</TableCell>
+    </TableRow>
   )
 }
 

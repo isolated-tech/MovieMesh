@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import TopNav from "@/components/top-nav"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,12 +29,27 @@ type GroupRound = {
 export default function GroupsPage() {
   const supabase = getSupabaseBrowserClient()
   const [authed, setAuthed] = useState(false)
-  const [username, setUsername] = useState<string>("")
+  const [, setUsername] = useState<string>("")
   const [userId, setUserId] = useState<string>("")
 
   const [groups, setGroups] = useState<Group[]>([])
   const [memberships, setMemberships] = useState<Record<string, string[]>>({}) // group_id -> usernames
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  const loadGroups = React.useCallback(async () => {
+    const { data: rows } = await supabase.from("group_members").select("group_id, groups(id, name, owner_id), profiles(username)")
+    const gs: Group[] = []
+    const mem: Record<string, string[]> = {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rows?.forEach((r: any) => {
+      const g = r.groups as Group
+      if (!gs.find((x) => x.id === g.id)) gs.push(g)
+      if (!mem[g.id]) mem[g.id] = []
+      mem[g.id].push(r.profiles?.username ?? "user")
+    })
+    setGroups(gs.sort((a, b) => a.name.localeCompare(b.name)))
+    setMemberships(mem)
+  }, [supabase])
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -46,21 +61,7 @@ export default function GroupsPage() {
       setUsername(p?.username ?? "")
       await loadGroups()
     })
-  }, [])
-
-  async function loadGroups() {
-    const { data: rows } = await supabase.from("group_members").select("group_id, groups(id, name, owner_id), profiles(username)")
-    const gs: Group[] = []
-    const mem: Record<string, string[]> = {}
-    rows?.forEach((r: any) => {
-      const g = r.groups as Group
-      if (!gs.find((x) => x.id === g.id)) gs.push(g)
-      if (!mem[g.id]) mem[g.id] = []
-      mem[g.id].push(r.profiles?.username ?? "user")
-    })
-    setGroups(gs.sort((a, b) => a.name.localeCompare(b.name)))
-    setMemberships(mem)
-  }
+  }, [loadGroups, supabase])
 
   const selected = useMemo(() => groups.find((g) => g.id === selectedId) || null, [groups, selectedId])
 
@@ -187,8 +188,10 @@ function GroupPanel({
 }) {
   const supabase = getSupabaseBrowserClient()
   const [round, setRound] = useState<GroupRound | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [results, setResults] = useState<any[]>([])
   const [members, setMembers] = useState<{ id: string; username: string }[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [myResult, setMyResult] = useState<any | null>(null)
 
   const [startName, setStartName] = useState("")
@@ -202,6 +205,7 @@ function GroupPanel({
         .from("group_members")
         .select("user_id, profiles(username)")
         .eq("group_id", group.id)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setMembers(mem?.map((m: any) => ({ id: m.user_id, username: m.profiles?.username ?? "user" })) ?? [])
 
       // current round (highest index)
@@ -212,6 +216,7 @@ function GroupPanel({
         .order("index", { ascending: false })
         .limit(1)
         .maybeSingle()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setRound((r as any) ?? null)
 
       if (r) {
@@ -220,6 +225,7 @@ function GroupPanel({
           .select("*")
           .eq("round_id", r.id)
         setResults(res ?? [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setMyResult(res?.find((x: any) => x.user_id === currentUserId) ?? null)
       }
     })()
@@ -231,6 +237,7 @@ function GroupPanel({
         "postgres_changes",
         { event: "*", schema: "public", table: "group_round_results" },
         (payload) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const row = payload.new as any
           if (round && row.round_id === round.id) {
             setResults((prev) => {
@@ -246,6 +253,7 @@ function GroupPanel({
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "group_rounds" },
         (payload) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const r = payload.new as any
           if (r.group_id === group.id) {
             setRound(r)
@@ -259,13 +267,13 @@ function GroupPanel({
     return () => {
       supabase.removeChannel(chan)
     }
-  }, [group, currentUserId])
+  }, [group, currentUserId, round, supabase])
 
   useEffect(() => {
     if (!round) return
     fetch(`/api/tmdb/person/${round.start_actor_id}`).then(r=>r.json()).then(d=>setStartName(d?.name || "Actor"))
     fetch(`/api/tmdb/person/${round.end_actor_id}`).then(r=>r.json()).then(d=>setEndName(d?.name || "Actor"))
-  }, [round?.id])
+  }, [round])
 
   if (!group) {
     return (
@@ -293,6 +301,7 @@ function GroupPanel({
   const completedCount = results.length
 
   async function onResult(r: GameResult) {
+    if (!round) return
     // Upsert result for current user and round
     const payload = {
       round_id: round.id,
@@ -311,7 +320,7 @@ function GroupPanel({
       .from("group_round_results")
       .select("*", { count: "exact", head: true })
       .eq("round_id", round.id)
-    if ((count ?? 0) >= members.length) {
+    if ((count ?? 0) >= members.length && group) {
       const pair = await fetch("/api/tmdb/random-pair").then(r=>r.json())
       await supabase
         .from("group_rounds")
@@ -432,7 +441,7 @@ function MemberName({ userId }: { userId: string }) {
     supabase.from("profiles").select("username").eq("id", userId).maybeSingle().then(({ data }) => {
       setName(data?.username ?? "user")
     })
-  }, [userId])
+  }, [userId, supabase])
   return <div className="text-sm font-medium">{name}</div>
 }
 

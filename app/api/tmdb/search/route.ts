@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server"
 import { searchMulti } from "@/lib/tmdb"
 
+interface Person {
+  id: number
+  name: string
+}
+
+interface Movie {
+  id: number
+  title: string
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
@@ -10,10 +20,11 @@ export async function GET(req: Request) {
     const data = await searchMulti(query, type, 1)
     const results =
       type === "person"
-        ? (data.results || []).map((p: any) => ({ id: String(p.id), label: p.name }))
-        : (data.results || []).map((m: any) => ({ id: String(m.id), label: m.title }))
+        ? (data.results || []).map((p: Person) => ({ id: String(p.id), label: p.name }))
+        : (data.results || []).map((m: Movie) => ({ id: String(m.id), label: m.title }))
     return NextResponse.json({ results })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : 'An error occurred'
+    return NextResponse.json({ error: errorMessage }, { status: 500 })
   }
 }

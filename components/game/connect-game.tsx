@@ -8,7 +8,6 @@ import SearchCombobox, { type SearchItem } from "./search-combobox"
 import {
   actorById,
   movieById,
-  type GraphNode,
   neighborsForActor,
   neighborsForMovie,
   isAdjacentActorToMovie,
@@ -46,11 +45,15 @@ export default function ConnectGame({
   onComplete?: (result: GameResult) => void
 }) {
   const nameCache = React.useRef(new Map<string, string>()) // id -> name/title
-  const creditCache = React.useRef(new Map<string, any[]>()) // id -> neighbors
-  const [tick, setTick] = React.useState(0)
+  interface Credit {
+    id: string | number
+    name?: string
+    title?: string
+  }
+  const creditCache = React.useRef(new Map<string, Credit[]>()) // id -> neighbors
+  const [, setTick] = React.useState(0)
 
   const startActor = actorById(startActorId)
-  const endActor = actorById(endActorId)
 
   const [path, setPath] = React.useState<string[]>([startActorId]) // alternates actor->movie->actor...
   const [running, setRunning] = React.useState(false)
@@ -60,7 +63,6 @@ export default function ConnectGame({
 
   const expectType: "movie" | "actor" = path.length % 2 === 1 ? "movie" : "actor"
   const lastId = path[path.length - 1]
-  const lastNodeType: "actor" | "movie" = expectType === "movie" ? "actor" : "movie"
 
   React.useEffect(() => {
     if (!running) return
@@ -115,7 +117,7 @@ export default function ConnectGame({
           })
           return []
         }
-        return (cached as any[]).map((m) => ({ id: String(m.id), label: m.title, meta: "Movie" }))
+        return (cached as Credit[]).map((m) => ({ id: String(m.id), label: m.title || "", meta: "Movie" }))
       } else {
         const cacheKey = `movie:${lastId}:cast`
         const cached = creditCache.current.get(cacheKey)
@@ -127,7 +129,7 @@ export default function ConnectGame({
           })
           return []
         }
-        return (cached as any[]).map((a) => ({ id: String(a.id), label: a.name, meta: "Actor" }))
+        return (cached as Credit[]).map((a) => ({ id: String(a.id), label: a.name || "", meta: "Actor" }))
       }
     }
   }
@@ -149,11 +151,11 @@ export default function ConnectGame({
     } else {
       if (nextType === "movie") {
         const cacheKey = `person:${lastId}:movies`
-        const list = (creditCache.current.get(cacheKey) || []) as any[]
+        const list = (creditCache.current.get(cacheKey) || []) as Credit[]
         if (!list.find((m) => String(m.id) === String(nextId))) return
       } else {
         const cacheKey = `movie:${lastId}:cast`
-        const list = (creditCache.current.get(cacheKey) || []) as any[]
+        const list = (creditCache.current.get(cacheKey) || []) as Credit[]
         if (!list.find((a) => String(a.id) === String(nextId))) return
       }
     }
@@ -297,7 +299,7 @@ function PathViewer({ ids = [], endActorId = "", dataSource, getActorName, getMo
       if (!cancelled) setLabels(arr)
     })()
     return () => { cancelled = true }
-  }, [ids.join("|"), dataSource])
+  }, [ids, dataSource, getActorName, getMovieTitle])
   const [endName, setEndName] = React.useState("")
   React.useEffect(() => {
     let c = false
@@ -306,7 +308,7 @@ function PathViewer({ ids = [], endActorId = "", dataSource, getActorName, getMo
       if (!c) setEndName(n)
     })()
     return () => { c = true }
-  }, [endActorId, dataSource])
+  }, [endActorId, dataSource, getActorName])
   return (
     <div className="flex flex-wrap items-center gap-2">
       {labels.map((label, idx) => (
@@ -328,23 +330,19 @@ function PathViewer({ ids = [], endActorId = "", dataSource, getActorName, getMo
 async function toPrettyPathAsync(ids: string[]) {
   const parts: string[] = []
   for (let i = 0; i < ids.length; i++) {
-    if (i % 2 === 0) parts.push(await getActorName(ids[i]))
-    else parts.push(await getMovieTitle(ids[i]))
+    if (i % 2 === 0) {
+      // Actor
+      const res = await fetch(`/api/tmdb/person/${ids[i]}`).then(r => r.json())
+      parts.push(res.name || ids[i])
+    } else {
+      // Movie
+      const res = await fetch(`/api/tmdb/movie/${ids[i]}`).then(r => r.json())
+      parts.push(res.title || ids[i])
+    }
   }
   return parts.join(" → ")
 }
 
-function toPrettyPath(ids: string[]) {
-  const parts: string[] = []
-  ids.forEach((id, idx) => {
-    if (idx % 2 === 0) {
-      parts.push(actorById(id)?.name || id)
-    } else {
-      parts.push(movieById(id)?.title || id)
-    }
-  })
-  return parts.join(" → ")
-}
 
 function persistResult(r: GameResult) {
   if (r.mode === "daily") {
